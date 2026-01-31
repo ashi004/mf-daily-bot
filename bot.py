@@ -9,7 +9,8 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-TEST_MODE = True  # Set False when ready to go live
+# Set to False to go LIVE
+TEST_MODE = True 
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -32,30 +33,40 @@ def send_telegram_msg():
     else:
         final_msg = generate_report(report_type="daily")
 
-    # --- 2. Create the "Invite" Content ---
-    invite_link = "https://t.me/+wjibPaNXP-xjZTE1"
+    # --- 2. THE FIX: Double Encoding Strategy ---
     
+    # Step A: The Raw Link (With the problematic +)
+    raw_link = "https://t.me/+wjibPaNXP-xjZTE1"
+    
+    # Step B: The Pitch
     invite_pitch = (
         "🚀 *Start tracking your Wealth!* \n\n"
         "Get daily Nifty updates, Mutual Fund tracking, and Gold rates automatically on Telegram.\n\n"
         "👇 *Join Nivesh Niti here (It's Free):*"
     )
     
-    # FIX: We add safe='' to force encoding of everything, including '/' and '+'
-    # This ensures the '+' becomes '%2B' and survives the trip to WhatsApp
+    # Step C: Encode for the URL Parameters
+    # We escape the text normally
     enc_pitch = urllib.parse.quote(invite_pitch)
-    enc_link = urllib.parse.quote(invite_link, safe='') 
+    
+    # *** MAGIC FIX *** # We replace '+' with '%252B' (Double Encoded)
+    # Why? Telegram decodes it once (%2B), WhatsApp decodes it again (+)
+    safe_link = raw_link.replace("+", "%252B")
+    
+    # Now we quote the whole link safely
+    enc_link = urllib.parse.quote(safe_link)
 
-    # Links
+    # 3. Create Deep Links
     wa_url = f"https://api.whatsapp.com/send?text={enc_pitch}%0A{enc_link}"
-    tg_url = f"https://t.me/share/url?url={invite_link}&text={enc_pitch}"
+    tg_url = f"https://t.me/share/url?url={raw_link}&text={enc_pitch}"
 
-    # --- 3. Layout ---
+    # --- 4. UX FIX: Short Labels for Equal Width ---
+    # By removing "Share on...", the buttons become equal size (50/50 split)
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "Share on WhatsApp 🟢", "url": wa_url},
-                {"text": "Share on Telegram ✈️", "url": tg_url}
+                {"text": "WhatsApp 🟢", "url": wa_url},
+                {"text": "Telegram ✈️", "url": tg_url}
             ]
         ]
     }
