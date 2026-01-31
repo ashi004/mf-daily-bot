@@ -9,7 +9,7 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-TEST_MODE = False  # Set False when ready to go live
+TEST_MODE = True  # Set False when ready to go live
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -35,21 +35,22 @@ def send_telegram_msg():
     # --- 2. Create the "Invite" Content ---
     invite_link = "https://t.me/+wjibPaNXP-xjZTE1"
     
-    # This text will appear when they share
     invite_pitch = (
         "🚀 *Start tracking your Wealth!* \n\n"
         "Get daily Nifty updates, Mutual Fund tracking, and Gold rates automatically on Telegram.\n\n"
         "👇 *Join Nivesh Niti here (It's Free):*"
     )
     
+    # FIX: We add safe='' to force encoding of everything, including '/' and '+'
+    # This ensures the '+' becomes '%2B' and survives the trip to WhatsApp
     enc_pitch = urllib.parse.quote(invite_pitch)
-    enc_link = urllib.parse.quote(invite_link)
+    enc_link = urllib.parse.quote(invite_link, safe='') 
 
     # Links
     wa_url = f"https://api.whatsapp.com/send?text={enc_pitch}%0A{enc_link}"
     tg_url = f"https://t.me/share/url?url={invite_link}&text={enc_pitch}"
 
-    # --- 3. Single Row Layout ---
+    # --- 3. Layout ---
     keyboard = {
         "inline_keyboard": [
             [
