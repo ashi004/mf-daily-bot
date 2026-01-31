@@ -1,8 +1,9 @@
 import requests
 import os
 import json
+from datetime import datetime
 from dotenv import load_dotenv
-from fetcher import generate_smart_report
+from fetcher import generate_report
 
 load_dotenv()
 
@@ -14,16 +15,25 @@ def send_telegram_msg():
         print("❌ Error: Credentials missing.")
         return
 
-    # Generate the Smart Report
-    print("📊 Generating Analytics Report...")
-    final_msg = generate_smart_report()
+    # --- Day Check ---
+    # weekday(): 0=Mon, 1=Tue ... 5=Sat, 6=Sun
+    day_index = datetime.today().weekday()
+    
+    is_weekend = day_index >= 5
+    
+    if is_weekend:
+        print("Generating WEEKLY Report...")
+        final_msg = generate_report(report_type="weekly")
+    else:
+        print("Generating DAILY Report...")
+        final_msg = generate_report(report_type="daily")
 
-    # Dynamic Buttons
+    # --- Single Button Strategy ---
+    # We only keep the "Share" button to drive channel growth
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "📈 Check Portfolio", "url": "https://www.google.com/finance"},
-                {"text": "📢 Share Channel", "url": "https://t.me/share/url?url=https://t.me/NiveshNitiDaily"}
+                {"text": "📢 Share Nivesh Niti", "url": "https://t.me/share/url?url=https://t.me/NiveshNitiDaily"}
             ]
         ]
     }
@@ -36,11 +46,14 @@ def send_telegram_msg():
         "reply_markup": json.dumps(keyboard)
     }
     
-    response = requests.post(url, json=payload)
-    if response.status_code == 200:
-        print("✅ Telegram Report Sent!")
-    else:
-        print(f"❌ Failed: {response.text}")
+    try:
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print("✅ Message Sent!")
+        else:
+            print(f"❌ Failed: {response.text}")
+    except Exception as e:
+        print(f"❌ Connection Error: {e}")
 
 if __name__ == "__main__":
     send_telegram_msg()
