@@ -7,18 +7,27 @@ from fetcher import generate_report
 
 load_dotenv()
 
+# --- ⚠️ SAFETY SWITCH ⚠️ ---
+# Set True for Testing, False for Real Audience
+TEST_MODE = True 
+
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
+    # Logic: Switch Channels based on Mode
+    if TEST_MODE:
+        print(f"🚧 TEST MODE ON: Sending to Test Lab (-1003461082219)")
+        chat_id = os.getenv("TEST_CHANNEL_ID") 
+    else:
+        print("🔴 LIVE MODE: Sending to Public Audience")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
     if not token or not chat_id:
-        print("❌ Error: Credentials missing.")
+        print("❌ Error: Missing Token or Channel ID (Check GitHub Secrets)")
         return
 
     # --- Day Check ---
-    # weekday(): 0=Mon, 1=Tue ... 5=Sat, 6=Sun
     day_index = datetime.today().weekday()
-    
     is_weekend = day_index >= 5
     
     if is_weekend:
@@ -28,8 +37,7 @@ def send_telegram_msg():
         print("Generating DAILY Report...")
         final_msg = generate_report(report_type="daily")
 
-    # --- Single Button Strategy ---
-    # We only keep the "Share" button to drive channel growth
+    # --- Button Strategy ---
     keyboard = {
         "inline_keyboard": [
             [
