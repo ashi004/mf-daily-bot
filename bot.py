@@ -1,6 +1,7 @@
 import requests
 import os
 import json
+import urllib.parse # We need this to format the text for links
 from datetime import datetime
 from dotenv import load_dotenv
 from fetcher import generate_report
@@ -8,40 +9,58 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-# Set True for Testing, False for Real Audience
-TEST_MODE = True 
+TEST_MODE = True  # Set False when ready to go live
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
     
-    # Logic: Switch Channels based on Mode
     if TEST_MODE:
-        print(f"🚧 TEST MODE ON: Sending to Test Lab (-1003461082219)")
+        print("🚧 TEST MODE ON")
         chat_id = os.getenv("TEST_CHANNEL_ID") 
     else:
-        print("🔴 LIVE MODE: Sending to Public Audience")
+        print("🔴 LIVE MODE")
         chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
     if not token or not chat_id:
-        print("❌ Error: Missing Token or Channel ID (Check GitHub Secrets)")
+        print("❌ Error: Missing Credentials")
         return
 
-    # --- Day Check ---
+    # 1. Generate Report
     day_index = datetime.today().weekday()
-    is_weekend = day_index >= 5
-    
-    if is_weekend:
-        print("Generating WEEKLY Report...")
+    if day_index >= 5:
         final_msg = generate_report(report_type="weekly")
     else:
-        print("Generating DAILY Report...")
         final_msg = generate_report(report_type="daily")
 
-    # --- Button Strategy ---
+    # --- 2. Create Smart Share Links ---
+    # The text people will see when they share
+    share_text = "Get daily Market & Mutual Fund updates automatically on Telegram! 🚀"
+    share_link = "https://t.me/NiveshNitiDaily"
+    
+    # We must "encode" the text so URLs don't break (spaces become %20)
+    encoded_text = urllib.parse.quote(share_text)
+    encoded_link = urllib.parse.quote(share_link)
+
+    # WhatsApp Link
+    wa_url = f"https://api.whatsapp.com/send?text={encoded_text}%20{encoded_link}"
+    
+    # Telegram Link
+    tg_url = f"https://t.me/share/url?url={share_link}&text={encoded_text}"
+    
+    # LinkedIn Link (Great for your educated audience)
+    li_url = f"https://www.linkedin.com/sharing/share-offsite/?url={share_link}"
+
+    # --- 3. Multi-Row Button Layout ---
     keyboard = {
         "inline_keyboard": [
             [
-                {"text": "📢 Share Nivesh Niti", "url": "https://t.me/share/url?url=https://t.me/NiveshNitiDaily"}
+                # Row 1: The Giants
+                {"text": "Share on WhatsApp 🟢", "url": wa_url}
+            ],
+            [
+                # Row 2: Professional & Internal
+                {"text": "Share on LinkedIn 💼", "url": li_url},
+                {"text": "Forward on Telegram ✈️", "url": tg_url}
             ]
         ]
     }
@@ -55,13 +74,10 @@ def send_telegram_msg():
     }
     
     try:
-        response = requests.post(url, json=payload)
-        if response.status_code == 200:
-            print("✅ Message Sent!")
-        else:
-            print(f"❌ Failed: {response.text}")
+        requests.post(url, json=payload)
+        print("✅ Message Sent!")
     except Exception as e:
-        print(f"❌ Connection Error: {e}")
+        print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     send_telegram_msg()
