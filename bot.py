@@ -1,7 +1,7 @@
 import requests
 import os
 import json
-import urllib.parse # We need this to format the text for links
+import urllib.parse
 from datetime import datetime
 from dotenv import load_dotenv
 from fetcher import generate_report
@@ -9,7 +9,8 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-TEST_MODE = True  # Set False when ready to go live
+# Set True for Testing, False for Real Audience
+TEST_MODE = True 
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -27,39 +28,34 @@ def send_telegram_msg():
 
     # 1. Generate Report
     day_index = datetime.today().weekday()
-    if day_index >= 5:
+    if day_index >= 5: # Saturday or Sunday
         final_msg = generate_report(report_type="weekly")
     else:
         final_msg = generate_report(report_type="daily")
 
     # --- 2. Create Smart Share Links ---
-    # The text people will see when they share
     share_text = "Get daily Market & Mutual Fund updates automatically on Telegram! 🚀"
     share_link = "https://t.me/NiveshNitiDaily"
     
-    # We must "encode" the text so URLs don't break (spaces become %20)
+    # Encode text for URLs
     encoded_text = urllib.parse.quote(share_text)
     encoded_link = urllib.parse.quote(share_link)
 
-    # WhatsApp Link
+    # WhatsApp Link (The most important one)
     wa_url = f"https://api.whatsapp.com/send?text={encoded_text}%20{encoded_link}"
     
-    # Telegram Link
+    # Telegram Forward Link
     tg_url = f"https://t.me/share/url?url={share_link}&text={encoded_text}"
-    
-    # LinkedIn Link (Great for your educated audience)
-    li_url = f"https://www.linkedin.com/sharing/share-offsite/?url={share_link}"
 
-    # --- 3. Multi-Row Button Layout ---
+    # --- 3. Optimized Button Layout ---
     keyboard = {
         "inline_keyboard": [
             [
-                # Row 1: The Giants
+                # WhatsApp gets the top row alone (Highest conversion)
                 {"text": "Share on WhatsApp 🟢", "url": wa_url}
             ],
             [
-                # Row 2: Professional & Internal
-                {"text": "Share on LinkedIn 💼", "url": li_url},
+                # Telegram on the second row
                 {"text": "Forward on Telegram ✈️", "url": tg_url}
             ]
         ]
