@@ -10,7 +10,7 @@ load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
 # Set True for Testing, False for Real Audience
-TEST_MODE = True 
+TEST_MODE = False 
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
