@@ -9,8 +9,7 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-# Set True for Testing, False for Real Audience
-TEST_MODE = False 
+TEST_MODE = True  # Set False when ready to go live
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -26,37 +25,69 @@ def send_telegram_msg():
         print("❌ Error: Missing Credentials")
         return
 
-    # 1. Generate Report
+    # 1. Generate the Report
     day_index = datetime.today().weekday()
-    if day_index >= 5: # Saturday or Sunday
+    if day_index >= 5:
         final_msg = generate_report(report_type="weekly")
     else:
         final_msg = generate_report(report_type="daily")
 
-    # --- 2. Create Smart Share Links ---
-    share_text = "Get daily Market & Mutual Fund updates automatically on Telegram! 🚀"
-    share_link = "https://t.me/NiveshNitiDaily"
+    # ==========================================
+    # STRATEGY 1: "SHARE THE UPDATE" LINKS
+    # (User shares the specific daily report)
+    # ==========================================
+    update_caption = "📉 Check out today's Market & Mutual Fund Update by Nivesh Niti!"
     
-    # Encode text for URLs
-    encoded_text = urllib.parse.quote(share_text)
-    encoded_link = urllib.parse.quote(share_link)
-
-    # WhatsApp Link (The most important one)
-    wa_url = f"https://api.whatsapp.com/send?text={encoded_text}%20{encoded_link}"
+    # We use the public channel link for the update source
+    channel_link = "https://t.me/NiveshNitiDaily"
     
-    # Telegram Forward Link
-    tg_url = f"https://t.me/share/url?url={share_link}&text={encoded_text}"
+    # Encode for URL safety
+    enc_update_text = urllib.parse.quote(update_caption)
+    enc_channel_link = urllib.parse.quote(channel_link)
 
-    # --- 3. Optimized Button Layout ---
+    # Links
+    wa_share_update = f"https://api.whatsapp.com/send?text={enc_update_text}%0A%0A{enc_channel_link}"
+    tg_share_update = f"https://t.me/share/url?url={channel_link}&text={enc_update_text}"
+
+    # ==========================================
+    # STRATEGY 2: "INVITE FRIENDS" LINKS
+    # (User shares the Channel Invite + Pitch)
+    # ==========================================
+    invite_link = "https://t.me/+wjibPaNXP-xjZTE1" # Your specific invite link
+    invite_pitch = (
+        "🚀 *Master the Market with Nivesh Niti!*\n\n"
+        "Get daily automated Mutual Fund tracking, Nifty updates, and Gold rates directly on Telegram.\n\n"
+        "✅ Daily NAV Alerts\n"
+        "✅ Weekly Winners & Losers\n"
+        "✅ 100% Free & Automated\n\n"
+        "👇 *Join smart investors here:*"
+    )
+    
+    enc_invite_pitch = urllib.parse.quote(invite_pitch)
+    enc_invite_link = urllib.parse.quote(invite_link)
+
+    # Links
+    wa_invite = f"https://api.whatsapp.com/send?text={enc_invite_pitch}%0A{enc_invite_link}"
+    tg_invite = f"https://t.me/share/url?url={invite_link}&text={enc_invite_pitch}"
+
+    # ==========================================
+    # BUTTON LAYOUT
+    # ==========================================
     keyboard = {
         "inline_keyboard": [
+            # Section 1: Share the News (Actionable)
             [
-                # WhatsApp gets the top row alone (Highest conversion)
-                {"text": "Share on WhatsApp 🟢", "url": wa_url}
+                {"text": "📤 Share this Update (WhatsApp)", "url": wa_share_update}
             ],
             [
-                # Telegram on the second row
-                {"text": "Forward on Telegram ✈️", "url": tg_url}
+                {"text": "✈️ Forward to Telegram Friends", "url": tg_share_update}
+            ],
+            # Section 2: Grow the Channel (Strategic)
+            [
+                {"text": "------------------------------------------------", "callback_data": "dummy"}
+            ],
+            [
+                {"text": "🚀 Invite Friends to Join Channel", "url": wa_invite}
             ]
         ]
     }
