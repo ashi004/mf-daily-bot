@@ -9,8 +9,8 @@ from fetcher import generate_report
 load_dotenv()
 
 # --- ⚠️ SAFETY SWITCH ⚠️ ---
-# Set to False to go LIVE
-TEST_MODE = True 
+# Set False to go LIVE
+TEST_MODE = True
 
 def send_telegram_msg():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -33,35 +33,34 @@ def send_telegram_msg():
     else:
         final_msg = generate_report(report_type="daily")
 
-    # --- 2. THE FIX: Double Encoding Strategy ---
+    # --- 2. THE FIX: Standard Encoding ---
     
-    # Step A: The Raw Link (With the problematic +)
-    raw_link = "https://t.me/+wjibPaNXP-xjZTE1"
+    # The Link (With the + sign)
+    invite_link = "https://t.me/+wjibPaNXP-xjZTE1"
     
-    # Step B: The Pitch
+    # The Text
     invite_pitch = (
         "🚀 *Start tracking your Wealth!* \n\n"
         "Get daily Nifty updates, Mutual Fund tracking, and Gold rates automatically on Telegram.\n\n"
         "👇 *Join Nivesh Niti here (It's Free):*"
     )
     
-    # Step C: Encode for the URL Parameters
-    # We escape the text normally
-    enc_pitch = urllib.parse.quote(invite_pitch)
+    # ENCODING LOGIC:
+    # We use quote() which turns '+' into '%2B' automatically.
+    # WhatsApp decodes '%2B' back to '+' (Correct).
+    # Telegram server receives '%2B' and understands it is a '+' (Correct).
     
-    # *** MAGIC FIX *** # We replace '+' with '%252B' (Double Encoded)
-    # Why? Telegram decodes it once (%2B), WhatsApp decodes it again (+)
-    safe_link = raw_link.replace("+", "%252B")
+    encoded_pitch = urllib.parse.quote(invite_pitch)
+    encoded_link = urllib.parse.quote(invite_link)
+
+    # WhatsApp URL: We combine Pitch + NewLine + Link into the 'text' parameter
+    wa_url = f"https://api.whatsapp.com/send?text={encoded_pitch}%0A{encoded_link}"
     
-    # Now we quote the whole link safely
-    enc_link = urllib.parse.quote(safe_link)
+    # Telegram URL: We separate 'url' and 'text' parameters correctly
+    # Note: We must encode the 'url' parameter itself so the '+' survives
+    tg_url = f"https://t.me/share/url?url={encoded_link}&text={encoded_pitch}"
 
-    # 3. Create Deep Links
-    wa_url = f"https://api.whatsapp.com/send?text={enc_pitch}%0A{enc_link}"
-    tg_url = f"https://t.me/share/url?url={raw_link}&text={enc_pitch}"
-
-    # --- 4. UX FIX: Short Labels for Equal Width ---
-    # By removing "Share on...", the buttons become equal size (50/50 split)
+    # --- 3. Button Layout ---
     keyboard = {
         "inline_keyboard": [
             [
