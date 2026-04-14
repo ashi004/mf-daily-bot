@@ -1,6 +1,6 @@
-mftool>=2.5
+mftool
 google-genai
-yfinance>=0.2.38
+yfinance
 python-dotenv
 pyTelegramBotAPI
 requests

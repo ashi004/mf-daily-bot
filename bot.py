@@ -1,14 +1,29 @@
+import os
 import time
-from fetcher import generate_report
 import telebot
+from fetcher import generate_report
+
+# Optional: If you ever run this locally on your machine, this loads the .env file
+from dotenv import load_dotenv
+load_dotenv()
+
+# --- SAFETY CHECK: API KEYS ---
+if not os.getenv("TELEGRAM_TOKEN") or not os.getenv("GEMINI_API_KEY"):
+    print("⚠️ WARNING: Missing API Keys in Environment! The bot might fail.")
 
 # --- RETRY CONFIGURATION ---
 MAX_RETRIES = 10  # Try up to 10 times
 RETRY_DELAY = 60  # Wait 60 seconds between attempts (1 minute)
 
 def run_live_bot():
-    bot = telebot.TeleBot(os.getenv("TELEGRAM_TOKEN"))
+    token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
+    if not token or not chat_id:
+        print("❌ Cannot start bot: TELEGRAM_TOKEN or TELEGRAM_CHAT_ID is missing.")
+        return
+
+    bot = telebot.TeleBot(token)
     
     for attempt in range(MAX_RETRIES):
         try:
