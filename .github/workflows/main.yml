@@ -2,22 +2,28 @@ name: Nivesh Niti Daily Bot
 
 on:
   schedule:
-    - cron: '30 3 * * *'  # Runs at 9:00 AM IST daily
+    - cron: '30 3 * * *'  # 9:00 AM IST
   push:
     branches: [ main ]
-  workflow_dispatch:      # Allows you to run it manually from GitHub
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    # This solves the Node.js 24 warning globally for this run
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
+    steps:
+      # Updated to v4 (latest stable)
+      - name: Checkout code
+        uses: actions/checkout@v4 
+
+      # Updated to v5 (Supports Node 24 and better caching)
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 
         with:
-          python-version: '3.10'
+          python-version: '3.11' # Upgraded for compatibility
 
       - name: Install dependencies
         run: |
