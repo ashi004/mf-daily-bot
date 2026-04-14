@@ -2,7 +2,6 @@ import os
 import time
 import yfinance as yf
 import telebot
-import pandas as pd
 from google import genai
 from nselib import capital_market
 from dotenv import load_dotenv
@@ -10,17 +9,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_closing_data():
-    nifty = yf.Ticker("^NSEI")
-    data = nifty.history(period="1d")
-    close_val = data['Close'].iloc[-1]
-    open_val = data['Open'].iloc[-1]
-    pct_change = ((close_val - open_val) / open_val) * 100
-    return close_val, pct_change
+    try:
+        nifty = yf.Ticker("^NSEI")
+        data = nifty.history(period="1d")
+        close_val = data['Close'].iloc[-1]
+        open_val = data['Open'].iloc[-1]
+        pct_change = ((close_val - open_val) / open_val) * 100
+        return close_val, pct_change
+    except Exception:
+        return 0.0, 0.0
 
 def get_fii_dii_data():
-    """Fetches FII & DII net activity for the day."""
+    """Fetches FII & DII net activity using a safer nselib check."""
     try:
-        df = capital_market.fii_dii_trading_activity()
+        # Safely check if the method exists in this version of the library
+        if hasattr(capital_market, 'fii_dii_trading_activity'):
+            df = capital_market.fii_dii_trading_activity()
+        else:
+            print("⚠️ FII/DII method missing in this version of nselib.")
+            return None, None
+            
         if df is None or df.empty:
             return None, None
             
@@ -33,7 +41,7 @@ def get_fii_dii_data():
         
         return fii_net, dii_net
     except Exception as e:
-        print(f"⚠️ Fetch Error or Data Not Ready: {e}")
+        print(f"⚠️ NSE Data Error: {e}")
         return None, None
 
 def run_evening_report():
@@ -41,53 +49,46 @@ def run_evening_report():
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     
-    # 1. Get Market Prices
     val, pct = get_closing_data()
     
-    # 2. SMART RETRY LOGIC FOR FII/DII
+    # Quick retry loop for FII/DII (waits 5 seconds, not 5 minutes, for fast testing)
     fii_net, dii_net = None, None
-    max_retries = 2 # Will try at 6:30, then 6:35, then 6:40
-    wait_seconds = 300 # 5 minutes
-    
-    for attempt in range(max_retries + 1):
+    for attempt in range(2): 
         print(f"Attempt {attempt + 1}: Fetching FII/DII data...")
         fii_net, dii_net = get_fii_dii_data()
-        
-        if fii_net is not None and dii_net is not None:
-            print("✅ FII/DII Data found!")
-            break # Exit the loop, we have the data!
-            
-        if attempt < max_retries:
-            print(f"⏳ Data not published yet. Waiting {wait_seconds//60} minutes...")
-            time.sleep(wait_seconds) # Pause script for 5 minutes
+        if fii_net is not None: 
+            break
+        time.sleep(5)
     
-    # 3. Generate AI Summary
-    prompt = f"Nifty closed at {val:.2f} today, a change of {pct:+.2f}%. Write a 2-sentence summary of the market mood. Tone: Tech-savvy and informal."
-    summary = client.models.generate_content(model="gemini-1.5-flash", contents=prompt).text.strip()
+    # Generating AI Summary with the correct model string
+    try:
+        prompt = f"Nifty closed at {val:.2f} today ({pct:+.2f}%). Write a 1-sentence market mood summary. Informal/Tech-savvy."
+        # Using gemini-2.0-flash to fix the 404 error
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        summary = response.text.strip()
+    except Exception as e:
+        print(f"AI Error: {e}")
+        summary = "Market ended the day with interesting price action. Watch the levels tomorrow!"
 
-    # 4. Construct the Message
     message = (
         f"☕ *Nivesh Niti: Closing Bell*\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"🏁 *Nifty 50:* {val:.2f} ({pct:+.2f}%)\n\n"
     )
 
-    if fii_net is not None and dii_net is not None:
+    if fii_net is not None:
         fii_emoji = "🟢" if fii_net > 0 else "🔴"
         dii_emoji = "🟢" if dii_net > 0 else "🔴"
-        
         message += (
             f"🏛️ *Institutional Activity (Net):*\n"
             f"• **FII:** ₹{fii_net:,.2f} Cr {fii_emoji}\n"
             f"• **DII:** ₹{dii_net:,.2f} Cr {dii_emoji}\n\n"
         )
     else:
-        message += "⏳ *Institutional Data:* NSE hasn't published today's FII/DII figures even after retries.\n\n"
+        message += "⏳ *Institutional Data:* Data not available yet from NSE.\n\n"
 
-    message += (
-        f"📝 *Day's Take:* {summary}\n\n"
-        f"💎 *Premium Members:* The Whale Watch report drops at 6:45 PM in Alpha Insights!"
-    )
+    message += f"📝 *Day's Take:* {summary}\n\n"
+    message += "💎 *Premium:* Whale Watch Excel report coming at 6:45 PM!"
     
     bot.send_message(chat_id, message, parse_mode="Markdown")
 
