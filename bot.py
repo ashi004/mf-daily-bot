@@ -1,77 +1,39 @@
-import requests
-import os
-import json
-import urllib.parse
-from datetime import datetime
-from dotenv import load_dotenv
+import time
 from fetcher import generate_report
+import telebot
 
-load_dotenv()
+# --- RETRY CONFIGURATION ---
+MAX_RETRIES = 10  # Try up to 10 times
+RETRY_DELAY = 60  # Wait 60 seconds between attempts (1 minute)
 
-# --- 🚀 LIVE DEPLOYMENT SWITCH 🚀 ---
-TEST_MODE = False  # Set to False to post to Nivesh Niti Daily
-
-def send_telegram_msg():
-    token = os.getenv("TELEGRAM_TOKEN")
+def run_live_bot():
+    bot = telebot.TeleBot(os.getenv("TELEGRAM_TOKEN"))
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
-    if TEST_MODE:
-        print("🚧 TEST MODE: Sending to Test Lab")
-        chat_id = os.getenv("TEST_CHANNEL_ID") 
-    else:
-        print("🔴 LIVE MODE: Sending to Nivesh Niti Daily")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    
-    if not token or not chat_id:
-        print("❌ Error: Missing Credentials in .env")
-        return
-
-    # 1. Generate the Report (Automatically handles Daily vs Weekly)
-    try:
-        final_msg = generate_report()
-    except Exception as e:
-        print(f"❌ Fetcher Error: {e}")
-        return
-
-    # --- 2. Smart Invite Content (Growth Strategy) ---
-    invite_link = "https://t.me/+wjibPaNXP-xjZTE1"
-    invite_pitch = (
-        "🚀 *Start tracking your Wealth!* \n\n"
-        "Get daily Nifty updates, Mutual Fund tracking, and Gold rates automatically on Telegram.\n\n"
-        "👇 *Join Nivesh Niti here (It's Free):*"
-    )
-    
-    # Safe encoding for the plus sign survival
-    enc_pitch = urllib.parse.quote(invite_pitch)
-    enc_link = urllib.parse.quote(invite_link, safe='') 
-
-    # Share URLs
-    wa_url = f"https://api.whatsapp.com/send?text={enc_pitch}%0A{enc_link}"
-    tg_url = f"https://t.me/share/url?url={enc_link}&text={enc_pitch}"
-
-    # --- 3. Premium Button Layout ---
-    keyboard = {
-        "inline_keyboard": [[
-            {"text": "WhatsApp 🟢", "url": wa_url},
-            {"text": "Telegram ✈️", "url": tg_url}
-        ]]
-    }
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": final_msg,
-        "parse_mode": "Markdown",
-        "reply_markup": json.dumps(keyboard)
-    }
-    
-    try:
-        r = requests.post(url, json=payload)
-        if r.status_code == 200:
-            print("✅ Live Update Posted Successfully!")
-        else:
-            print(f"❌ Telegram API Error: {r.text}")
-    except Exception as e:
-        print(f"❌ Deployment Error: {e}")
+    for attempt in range(MAX_RETRIES):
+        try:
+            print(f"🚀 Attempt {attempt + 1}: Generating Report...")
+            report = generate_report()
+            
+            # CRITICAL: Only send if we got real values, not a holiday/error msg
+            if "Intelligence" in report:
+                bot.send_message(chat_id, report, parse_mode="Markdown")
+                print("✅ Successfully sent Live Report!")
+                return # Exit the loop and end the script
+            
+            elif "Holiday" in report:
+                bot.send_message(chat_id, report, parse_mode="Markdown")
+                print("☕ Holiday Message Sent.")
+                return
+                
+        except Exception as e:
+            print(f"❌ Attempt {attempt + 1} failed: {e}")
+            if attempt < MAX_RETRIES - 1:
+                print(f"🔄 Waiting {RETRY_DELAY}s before retrying...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print("🛑 All retries exhausted. Sending error alert to Admin.")
+                # Optional: bot.send_message(MY_PERSONAL_ID, "Bot failed to fetch data after 10 tries.")
 
 if __name__ == "__main__":
-    send_telegram_msg()
+    run_live_bot()
