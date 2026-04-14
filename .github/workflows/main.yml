@@ -4,8 +4,8 @@ on:
   schedule:
     # 9:10 AM IST (03:40 AM UTC) - Monday to Friday
     - cron: '40 3 * * 1-5'
-    # 6:00 PM IST (12:30 PM UTC) - Monday to Friday
-    - cron: '30 12 * * 1-5'
+    # 6:30 PM IST (13:00 UTC) - Monday to Friday
+    - cron: '00 13 * * 1-5'
   push:
     branches: [ main ]
   workflow_dispatch:
@@ -38,11 +38,11 @@ jobs:
           # Get the current hour in UTC
           HOUR=$(date +%H)
           
-          # If the hour is 03 (UTC), it's the 9:10 AM IST run
+          # If the hour is 03 or 04 (UTC), it's the 9:10 AM IST run
           if [ "$HOUR" -eq 03 ] || [ "$HOUR" -eq 04 ]; then
             echo "☀️ Starting Morning Opening Pulse..."
             python morning_report.py
-          # If the hour is 12 (UTC), it's the 6:00 PM IST run
+          # If the hour is 13 (UTC), it's the 6:30 PM IST run
           else
             echo "☕ Starting Evening Closing Bell..."
             python evening_report.py
