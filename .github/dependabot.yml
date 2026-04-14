@@ -1,0 +1,7 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"    # Look for Python updates
+    directory: "/"               # Look in the root folder for requirements.txt
+    schedule:
+      interval: "daily"          # Check every day for new versions
+    open-pull-requests-limit: 5  # Max 5 update suggestions at a time
