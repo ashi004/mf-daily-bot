@@ -5,6 +5,7 @@ python-dotenv
 pyTelegramBotAPI
 requests
 pandas
-transformers
-torch
 feedparser
+xlsxwriter
+nselib
+NseKit
