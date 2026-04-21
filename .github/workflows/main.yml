@@ -2,22 +2,23 @@ name: Nivesh Niti Free Daily Updates
 
 on:
   schedule:
-    # 9:10 AM IST (03:40 AM UTC) - Monday to Friday
-    - cron: '40 3 * * 1-5'
-    # 6:30 PM IST (13:00 UTC) - Monday to Friday
-    - cron: '00 13 * * 1-5'
+    - cron: '40 3 * * 1-5'   # 9:10 AM IST  Mon-Fri
+    - cron: '00 13 * * 1-5'  # 6:30 PM IST  Mon-Fri
   push:
     branches: [ main ]
   workflow_dispatch:
     inputs:
       report_type:
-        description: 'Which report to run manually?'
+        description: 'Which report to run?'
         required: true
         default: 'evening'
         type: choice
         options:
           - morning
           - evening
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # fixes Node.js deprecation warning
 
 jobs:
   build:
@@ -39,28 +40,26 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Morning Report (9:10 AM IST)
-        # Fires ONLY when the morning cron triggers, or manual override
         if: |
           github.event.schedule == '40 3 * * 1-5' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.report_type == 'morning')
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "☀️ Starting Morning Opening Pulse..."
+          echo "☀️ Running Morning Report..."
           python morning_report.py
 
       - name: Run Evening Report (6:30 PM IST)
-        # Fires ONLY when the evening cron triggers, or manual override, or push
         if: |
           github.event.schedule == '00 13 * * 1-5' ||
           (github.event_name == 'workflow_dispatch' && github.event.inputs.report_type == 'evening') ||
           github.event_name == 'push'
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
         run: |
-          echo "☕ Starting Evening Closing Bell..."
+          echo "☕ Running Evening Report..."
           python evening_report.py

@@ -2,9 +2,11 @@ name: Nivesh Niti Premium — Whale Watch
 
 on:
   schedule:
-    # 6:45 PM IST Mon-Fri (13:15 UTC)
-    - cron: '15 13 * * 1-5'
+    - cron: '15 13 * * 1-5'  # 6:45 PM IST Mon-Fri
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-premium:
@@ -24,7 +26,7 @@ jobs:
 
       - name: Run Whale Watch
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:  ${{ secrets.TELEGRAM_TOKEN }}
           PREMIUM_CHAT_ID: ${{ secrets.PREMIUM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:  ${{ secrets.GEMINI_API_KEY }}
         run: python premium_deals.py

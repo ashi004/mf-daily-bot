@@ -1,5 +1,14 @@
+"""
+premium_deals.py
+-----------------
+Whale Watch report: fetches Bulk Deals and Insider Trading from NSE
+using direct HTTP requests (no unstable third-party NSE libraries).
+Sends a text summary + Excel file to the premium Telegram channel.
+"""
+
 import os
 import time
+import requests
 import pandas as pd
 import telebot
 from io import BytesIO
@@ -7,149 +16,190 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ─── DATA FETCHING ────────────────────────────────────────────────────────────
+# ─── NSE SESSION ──────────────────────────────────────────────────────────────
+
+NSE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer":         "https://www.nseindia.com/",
+    "Connection":      "keep-alive",
+    "Sec-Fetch-Dest":  "empty",
+    "Sec-Fetch-Mode":  "cors",
+    "Sec-Fetch-Site":  "same-origin",
+    "Cache-Control":   "no-cache",
+}
+
+
+def _get_nse_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update(NSE_HEADERS)
+    try:
+        session.get("https://www.nseindia.com", timeout=15)
+        time.sleep(2)
+        session.get("https://www.nseindia.com/market-data/bulk-block-deals", timeout=15)
+        time.sleep(1)
+    except Exception as e:
+        print(f"NSE warm-up error: {e}")
+    return session
+
+
+# ─── DATA FETCHERS ────────────────────────────────────────────────────────────
 
 def fetch_bulk_deals() -> pd.DataFrame:
-    """Fetch bulk deals from NSE. Tries NseKit first, then nselib."""
-    # Method 1: NseKit
+    """Fetches bulk deals directly from NSE JSON API."""
     try:
-        from NseKit import get
-        df = get.bulk_deals()
-        if df is not None and not df.empty:
-            print(f"[BulkDeals] NseKit → {len(df)} rows")
-            return df
-    except Exception as e:
-        print(f"[BulkDeals] NseKit failed: {e}")
+        session = _get_nse_session()
+        resp = session.get(
+            "https://www.nseindia.com/api/bulk-deals-new",
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
-    # Method 2: nselib
-    try:
-        from nselib import capital_market
-        df = capital_market.bulk_deal_data()
-        if df is not None and not df.empty:
-            print(f"[BulkDeals] nselib → {len(df)} rows")
-            return df
-    except Exception as e:
-        print(f"[BulkDeals] nselib failed: {e}")
+        # NSE returns {"data": [...]} or just [...]
+        records = data.get("data", data) if isinstance(data, dict) else data
+        if not records:
+            print("Bulk deals: empty response")
+            return pd.DataFrame()
 
-    return pd.DataFrame()
+        df = pd.DataFrame(records)
+        print(f"Bulk deals fetched: {len(df)} rows")
+        return df
+
+    except Exception as e:
+        print(f"Bulk deals fetch error: {e}")
+        return pd.DataFrame()
 
 
 def fetch_insider_trading() -> pd.DataFrame:
-    """Fetch insider trading data. Tries nselib first, then NseKit."""
-    # Method 1: nselib
+    """Fetches insider trading data directly from NSE JSON API."""
     try:
-        from nselib import capital_market
-        df = capital_market.insider_trading_data(period='1D')
-        if df is not None and not df.empty:
-            print(f"[Insider] nselib → {len(df)} rows")
-            return df
+        session = _get_nse_session()
+        resp = session.get(
+            "https://www.nseindia.com/api/corporates-pit?index=equities&period=oneDay",
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        records = data.get("data", data) if isinstance(data, dict) else data
+        if not records:
+            print("Insider trading: empty response")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(records)
+        print(f"Insider trading fetched: {len(df)} rows")
+        return df
+
     except Exception as e:
-        print(f"[Insider] nselib failed: {e}")
-
-    # Method 2: NseKit
-    try:
-        from NseKit import get
-        df = get.insider_trading()
-        if df is not None and not df.empty:
-            print(f"[Insider] NseKit → {len(df)} rows")
-            return df
-    except Exception as e:
-        print(f"[Insider] NseKit failed: {e}")
-
-    return pd.DataFrame()
+        print(f"Insider trading fetch error: {e}")
+        return pd.DataFrame()
 
 
-# ─── EXCEL BUILDER ───────────────────────────────────────────────────────────
+# ─── EXCEL BUILDER ────────────────────────────────────────────────────────────
 
 def build_excel(bulk_df: pd.DataFrame, insider_df: pd.DataFrame) -> BytesIO:
     output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        workbook = writer.book
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        wb = writer.book
 
-        header_fmt = workbook.add_format({
-            'bold': True, 'bg_color': '#1F4E79', 'font_color': 'white',
-            'border': 1, 'align': 'center', 'valign': 'vcenter'
+        header_fmt = wb.add_format({
+            "bold": True, "bg_color": "#1F4E79", "font_color": "white",
+            "border": 1, "align": "center", "valign": "vcenter",
         })
-        num_fmt = workbook.add_format({'num_format': '#,##0.00', 'border': 1})
-        cell_fmt = workbook.add_format({'border': 1})
+        cell_fmt = wb.add_format({"border": 1})
+        num_fmt  = wb.add_format({"border": 1, "num_format": "#,##0.00"})
 
-        def write_sheet(df: pd.DataFrame, sheet_name: str):
-            df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1, header=False)
-            ws = writer.sheets[sheet_name]
-            for col_num, col_name in enumerate(df.columns):
-                ws.write(0, col_num, col_name, header_fmt)
-                # Auto-fit column width
-                max_len = max(len(str(col_name)), df[col_name].astype(str).map(len).max() if not df.empty else 0)
-                ws.set_column(col_num, col_num, min(max_len + 4, 40))
-            for row_num in range(len(df)):
-                for col_num in range(len(df.columns)):
-                    val = df.iloc[row_num, col_num]
-                    if isinstance(val, (int, float)):
-                        ws.write(row_num + 1, col_num, val, num_fmt)
-                    else:
-                        ws.write(row_num + 1, col_num, str(val), cell_fmt)
+        def write_sheet(df: pd.DataFrame, name: str):
+            if df.empty:
+                return
+            df.to_excel(writer, sheet_name=name, index=False, startrow=1, header=False)
+            ws = writer.sheets[name]
+            for i, col in enumerate(df.columns):
+                ws.write(0, i, col, header_fmt)
+                width = max(len(str(col)), df[col].astype(str).map(len).max() if not df.empty else 0)
+                ws.set_column(i, i, min(width + 4, 40))
+            for r in range(len(df)):
+                for c in range(len(df.columns)):
+                    val = df.iloc[r, c]
+                    fmt = num_fmt if isinstance(val, (int, float)) else cell_fmt
+                    ws.write(r + 1, c, val, fmt)
 
-        if not bulk_df.empty:
-            write_sheet(bulk_df, 'Bulk_Deals')
-        if not insider_df.empty:
-            write_sheet(insider_df, 'Insider_Trading')
+        write_sheet(bulk_df,    "Bulk_Deals")
+        write_sheet(insider_df, "Insider_Trading")
 
     output.seek(0)
     return output
 
 
-# ─── MESSAGE BUILDER ─────────────────────────────────────────────────────────
+# ─── SUMMARY MESSAGE ──────────────────────────────────────────────────────────
 
-def build_summary_message(bulk_df: pd.DataFrame, insider_df: pd.DataFrame) -> str:
-    message = "🐋 *PREMIUM: Daily Whale Watch Report*\n━━━━━━━━━━━━━━━━━━\n"
+def _col(df: pd.DataFrame, *keywords) -> str | None:
+    """Finds first column whose name contains any of the keywords (case-insensitive)."""
+    for kw in keywords:
+        for c in df.columns:
+            if kw.lower() in c.lower():
+                return c
+    return None
 
-    # Insider – Promoter buys
+
+def build_message(bulk_df: pd.DataFrame, insider_df: pd.DataFrame) -> str:
+    msg = "🐋 *PREMIUM: Daily Whale Watch Report*\n━━━━━━━━━━━━━━━━━━\n\n"
+
+    # ── Insider: Promoter buys ──
     if not insider_df.empty:
-        # Try to identify promoter buys (column names vary by source)
-        cat_col = next((c for c in insider_df.columns if 'category' in c.lower() or 'person' in c.lower()), None)
-        mode_col = next((c for c in insider_df.columns if 'mode' in c.lower() or 'acquisition' in c.lower()), None)
-        sym_col  = next((c for c in insider_df.columns if 'symbol' in c.lower()), None)
-        qty_col  = next((c for c in insider_df.columns if 'qty' in c.lower() or 'no_' in c.lower() or 'quantity' in c.lower()), None)
+        cat_col  = _col(insider_df, "category", "person")
+        mode_col = _col(insider_df, "mode", "acquisition", "transtype")
+        sym_col  = _col(insider_df, "symbol")
+        qty_col  = _col(insider_df, "qty", "quantity", "secqty", "no_")
 
         if cat_col and mode_col and sym_col:
             mask = (
-                insider_df[cat_col].str.upper().str.contains('PROMOTER', na=False) &
-                insider_df[mode_col].str.upper().str.contains('PURCHASE|BUY', na=False)
+                insider_df[cat_col].astype(str).str.upper().str.contains("PROMOTER", na=False) &
+                insider_df[mode_col].astype(str).str.upper().str.contains("PURCHASE|BUY", na=False)
             )
             p_buys = insider_df[mask].head(5)
             if not p_buys.empty:
-                message += "🔑 *Promoter Market Buys (Top 5):*\n"
+                msg += "🔑 *Promoter Market Buys (Top 5):*\n"
                 for _, row in p_buys.iterrows():
-                    qty = f"{int(row[qty_col]):,}" if qty_col else "N/A"
-                    message += f"• *{row[sym_col]}*: {qty} shares\n"
-                message += "\n"
+                    qty = f"{int(float(row[qty_col])):,}" if qty_col else "N/A"
+                    msg += f"• *{row[sym_col]}*: {qty} shares\n"
+                msg += "\n"
 
-    # Bulk Deals – buy side
+    # ── Bulk Deals: buy side ──
     if not bulk_df.empty:
-        buy_col = next((c for c in bulk_df.columns if 'buy' in c.lower() and 'sell' in c.lower()), None)
-        if buy_col is None:
-            buy_col = next((c for c in bulk_df.columns if 'buy' in c.lower() or 'side' in c.lower()), None)
-        sym_col = next((c for c in bulk_df.columns if 'symbol' in c.lower()), None)
-        qty_col = next((c for c in bulk_df.columns if 'qty' in c.lower() or 'quantity' in c.lower()), None)
+        side_col = _col(bulk_df, "buysell", "buy / sell", "side", "type")
+        sym_col  = _col(bulk_df, "symbol")
+        qty_col  = _col(bulk_df, "qty", "quantity")
 
-        if buy_col and sym_col:
-            b_buys = bulk_df[bulk_df[buy_col].str.upper().str.contains('BUY', na=False)].head(5)
-            if not b_buys.empty:
-                message += "🏛️ *Top Bulk Buys (Top 5):*\n"
-                for _, row in b_buys.iterrows():
-                    qty = f"{int(row[qty_col]):,}" if qty_col else "N/A"
-                    message += f"• *{row[sym_col]}*: {qty} shares\n"
-                message += "\n"
+        if side_col and sym_col:
+            buys = bulk_df[
+                bulk_df[side_col].astype(str).str.upper().str.contains("BUY", na=False)
+            ].head(5)
+            if not buys.empty:
+                msg += "🏛️ *Top Bulk Buys (Top 5):*\n"
+                for _, row in buys.iterrows():
+                    qty = f"{int(float(row[qty_col])):,}" if qty_col else "N/A"
+                    msg += f"• *{row[sym_col]}*: {qty} shares\n"
+                msg += "\n"
 
     if not bulk_df.empty or not insider_df.empty:
-        message += "📑 *Full Data Attached:* Open the Excel file for the complete list."
+        msg += "📑 *Full data attached* — open the Excel file for complete details."
     else:
-        message += "⚠️ *Note:* Could not fetch live data from NSE today. Market may be closed or NSE API is down."
+        msg += (
+            "⚠️ Could not fetch live NSE data today.\n"
+            "Market may be closed or NSE API is temporarily down."
+        )
+    return msg
 
-    return message
 
-
-# ─── MAIN ────────────────────────────────────────────────────────────────────
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def run_whale_watch():
     token      = os.getenv("TELEGRAM_TOKEN")
@@ -161,28 +211,25 @@ def run_whale_watch():
 
     bot = telebot.TeleBot(token)
 
-    print("📦 Fetching bulk deals…")
+    print("📦 Fetching bulk deals...")
     bulk_df = fetch_bulk_deals()
 
-    print("🔍 Fetching insider trading…")
+    print("🔍 Fetching insider trading...")
     insider_df = fetch_insider_trading()
 
-    message = build_summary_message(bulk_df, insider_df)
+    msg = build_message(bulk_df, insider_df)
+    bot.send_message(premium_id, msg, parse_mode="Markdown")
 
-    # Always send text summary
-    bot.send_message(premium_id, message, parse_mode="Markdown")
-
-    # Send Excel only if we have data
     if not bulk_df.empty or not insider_df.empty:
-        excel_bytes = build_excel(bulk_df, insider_df)
+        excel = build_excel(bulk_df, insider_df)
         bot.send_document(
             premium_id,
-            document=('NSE_Whale_Report.xlsx', excel_bytes),
-            caption="📊 Nivesh Niti Premium: Bulk & Insider Data"
+            document=("NSE_Whale_Report.xlsx", excel),
+            caption="📊 Nivesh Niti Premium: Bulk & Insider Data",
         )
-        print("✅ Whale Watch report sent with Excel attachment.")
+        print("✅ Whale Watch report sent with Excel.")
     else:
-        print("⚠️ No data to attach — only text summary sent.")
+        print("⚠️ No data — only text summary sent.")
 
 
 if __name__ == "__main__":

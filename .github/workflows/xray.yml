@@ -2,9 +2,11 @@ name: Nivesh Niti Premium — Weekend X-Ray
 
 on:
   schedule:
-    # 9:30 AM IST every Saturday (04:00 UTC)
-    - cron: '0 4 * * 6'
+    - cron: '0 4 * * 6'   # 9:30 AM IST every Saturday
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   portfolio-xray:

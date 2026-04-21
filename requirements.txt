@@ -9,14 +9,12 @@ pyTelegramBotAPI>=4.18.0
 yfinance>=0.2.40
 
 # ── AI / Gemini ───────────────────────────────────────
-google-genai>=0.8.0
+google-genai>=1.0.0
 
-# ── NSE data libraries ────────────────────────────────
-nselib>=2.1.0
-NseKit>=0.1.0
+# ── Mutual Fund data ──────────────────────────────────
 mftool>=2.4.6
 
-# ── Sentiment analysis ────────────────────────────────
+# ── Sentiment / RSS ───────────────────────────────────
 feedparser>=6.0.11
 
 # ── Excel / data processing ───────────────────────────
