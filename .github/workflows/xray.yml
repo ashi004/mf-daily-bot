@@ -1,8 +1,9 @@
-name: Nivesh Niti Premium X-Ray
+name: Nivesh Niti Premium — Weekend X-Ray
 
 on:
   schedule:
-    - cron: '0 4 * * 6' # 9:30 AM IST every Saturday
+    # 9:30 AM IST every Saturday (04:00 UTC)
+    - cron: '0 4 * * 6'
   workflow_dispatch:
 
 jobs:
@@ -10,13 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install
-        run: pip install -r requirements.txt
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run Portfolio X-Ray
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN:  ${{ secrets.TELEGRAM_TOKEN }}
           PREMIUM_CHAT_ID: ${{ secrets.PREMIUM_CHAT_ID }}
         run: python premium_xray.py

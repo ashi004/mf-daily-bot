@@ -2,16 +2,16 @@ name: Nivesh Niti Free Daily Updates
 
 on:
   schedule:
-    # Morning Pulse: 9:10 AM IST (03:40 UTC) — Monday to Friday
+    # 9:10 AM IST (03:40 AM UTC) - Monday to Friday
     - cron: '40 3 * * 1-5'
-    # Closing Bell:  6:30 PM IST (13:00 UTC) — Monday to Friday
+    # 6:30 PM IST (13:00 UTC) - Monday to Friday
     - cron: '00 13 * * 1-5'
-
-  # Manual trigger for testing — does NOT run automatically on push
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       report_type:
-        description: 'Which report to run?'
+        description: 'Which report to run manually?'
         required: true
         default: 'evening'
         type: choice
@@ -38,44 +38,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Market Update
+      - name: Run Morning Report (9:10 AM IST)
+        # Fires ONLY when the morning cron triggers, or manual override
+        if: |
+          github.event.schedule == '40 3 * * 1-5' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.report_type == 'morning')
         env:
-          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # ── Scheduled run: detect by UTC hour ──────────────────────────────
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            HOUR=$(date -u +%H)
-            MIN=$(date -u +%M)
-            echo "⏰ Scheduled run at UTC ${HOUR}:${MIN}"
+          echo "☀️ Starting Morning Opening Pulse..."
+          python morning_report.py
 
-            # Morning window:  03:30–04:00 UTC  → 9:00–9:30 AM IST
-            if [ "$HOUR" -eq 3 ] && [ "$MIN" -ge 30 ]; then
-              echo "☀️ Starting Morning Opening Pulse..."
-              python morning_report.py
-
-            # Also catch slight drift: if GitHub fires this just after 04:00
-            elif [ "$HOUR" -eq 4 ] && [ "$MIN" -lt 15 ]; then
-              echo "☀️ Starting Morning Opening Pulse (delayed)..."
-              python morning_report.py
-
-            # Evening window: 13:00–13:30 UTC → 6:30–7:00 PM IST
-            elif [ "$HOUR" -eq 13 ]; then
-              echo "☕ Starting Evening Closing Bell..."
-              python evening_report.py
-
-            else
-              echo "⚠️ Unknown hour ${HOUR}:${MIN} — skipping to avoid wrong report."
-            fi
-
-          # ── Manual run: use the dropdown input ─────────────────────────────
-          else
-            REPORT="${{ github.event.inputs.report_type }}"
-            echo "🖐️ Manual trigger — running: ${REPORT}"
-            if [ "$REPORT" = "morning" ]; then
-              python morning_report.py
-            else
-              python evening_report.py
-            fi
-          fi
+      - name: Run Evening Report (6:30 PM IST)
+        # Fires ONLY when the evening cron triggers, or manual override, or push
+        if: |
+          github.event.schedule == '00 13 * * 1-5' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.report_type == 'evening') ||
+          github.event_name == 'push'
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "☕ Starting Evening Closing Bell..."
+          python evening_report.py
