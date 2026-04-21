@@ -1,11 +1,26 @@
-mftool
-google-genai
-yfinance
-python-dotenv
-pyTelegramBotAPI
-requests
-pandas
-feedparser
-xlsxwriter
-nselib
-NseKit
+# Core
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Telegram
+pyTelegramBotAPI>=4.18.0
+
+# Market data
+yfinance>=0.2.40
+
+# AI / Gemini
+google-genai>=0.8.0
+
+# NSE data libraries
+nselib>=2.1.0
+NseKit>=0.1.0
+mftool>=2.4.6
+
+# Sentiment analysis
+feedparser>=6.0.11
+transformers>=4.40.0
+
+# Excel / data processing
+pandas>=2.2.0
+xlsxwriter>=3.2.0
+openpyxl>=3.1.2
