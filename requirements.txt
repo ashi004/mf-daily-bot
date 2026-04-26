@@ -12,7 +12,7 @@ yfinance>=0.2.40
 google-genai>=1.0.0
 
 # ── Mutual Fund data ──────────────────────────────────
-mftool>=2.4.6
+mftool>=3.2
 
 # ── Sentiment / RSS ───────────────────────────────────
 feedparser>=6.0.11
